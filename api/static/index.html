@@ -1,0 +1,142 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Smart Desk Box</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<header class="top">
+  <div class="brand"><span class="logo" aria-hidden="true"></span>Smart Desk Box</div>
+  <div class="top-status">
+    <span class="pill" id="statePill">—</span>
+    <span class="gw" id="gw"><span class="dot"></span><span id="gwText">Box offline</span></span>
+  </div>
+</header>
+
+<main class="wrap">
+  <section class="grid-top">
+    <div class="panel live">
+      <div class="panel-head"><h2>Live</h2><span class="muted small" id="lastSeen">waiting for data…</span></div>
+      <div class="cards" id="cards"></div>
+      <div class="chart-wrap"><canvas id="liveChart" aria-label="Last 15 minutes"></canvas></div>
+      <div class="chart-legend muted small">Last 15 minutes · temperature (°C) and humidity (%)</div>
+    </div>
+
+    <div class="panel focus" id="focus">
+      <div class="panel-head"><h2>Focus session</h2></div>
+
+      <form id="startForm" class="start" autocomplete="off">
+        <div class="field">
+          <span class="label">Mode</span>
+          <div class="seg" role="radiogroup" aria-label="Mode">
+            <label><input type="radio" name="mode" id="modeLocked" value="locked" checked><span>Lock my phone inside</span></label>
+            <label><input type="radio" name="mode" id="modeTimer" value="timer"><span>Timer only</span></label>
+          </div>
+        </div>
+        <div class="field">
+          <span class="label">Duration</span>
+          <div class="seg" role="radiogroup" aria-label="Duration">
+            <label><input type="radio" name="dur" value="25" checked><span>25 min</span></label>
+            <label><input type="radio" name="dur" value="50"><span>50 min</span></label>
+            <label><input type="radio" name="dur" value="90"><span>90 min</span></label>
+            <label><input type="radio" name="dur" value="custom"><span>Custom</span></label>
+          </div>
+          <input type="number" id="customMin" min="1" max="600" value="30" hidden aria-label="Minutes">
+        </div>
+        <div class="field" id="safewordField">
+          <label class="label" for="safeword">Safeword</label>
+          <input type="password" id="safeword" minlength="3" placeholder="Needed to unlock early">
+          <span class="hint">Pick something you won't type on impulse. It's forgotten when the session ends.</span>
+        </div>
+        <div class="lidline" id="lidLine"><span class="dot"></span><span id="lidText">Lid status unknown</span></div>
+        <p class="err" id="startErr" role="alert"></p>
+        <button type="submit" class="btn primary" id="startBtn">Start session</button>
+      </form>
+
+      <div id="running" hidden>
+        <div class="ring-wrap">
+          <svg viewBox="0 0 120 120" class="ring" aria-hidden="true">
+            <circle cx="60" cy="60" r="52" class="ring-bg"/>
+            <circle cx="60" cy="60" r="52" class="ring-fg" id="ringFg"/>
+          </svg>
+          <div class="ring-text"><div class="big" id="countdown">--:--</div><div class="muted small" id="runMode">—</div></div>
+        </div>
+        <p class="run-note" id="runNote"></p>
+        <div id="lockedControls">
+          <form id="unlockForm" class="row" autocomplete="off">
+            <input type="password" id="unlockWord" placeholder="Safeword" aria-label="Safeword">
+            <button class="btn" type="submit">Unlock early</button>
+          </form>
+          <p class="err" id="unlockErr" role="alert"></p>
+          <button class="btn danger ghost" id="emergencyBtn" type="button">Emergency unlock</button>
+        </div>
+        <div id="timerControls"><button class="btn" id="stopBtn" type="button">Stop</button></div>
+      </div>
+    </div>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head">
+      <h2>History</h2>
+      <div class="controls">
+        <select id="histField" aria-label="Sensor">
+          <option value="temp">Temperature (°C)</option>
+          <option value="hum">Humidity (%)</option>
+          <option value="gas">Air quality (raw)</option>
+          <option value="light">Light (raw)</option>
+          <option value="dist">Distance (cm)</option>
+          <option value="level">State level (0 OK – 2 NOT OK)</option>
+        </select>
+        <div class="seg small" role="radiogroup" aria-label="Range">
+          <label><input type="radio" name="range" value="1h"><span>1 h</span></label>
+          <label><input type="radio" name="range" value="24h" checked><span>24 h</span></label>
+          <label><input type="radio" name="range" value="7d"><span>7 d</span></label>
+          <label><input type="radio" name="range" value="30d"><span>30 d</span></label>
+        </div>
+      </div>
+    </div>
+    <div class="stats" id="histStats"></div>
+    <div class="chart-wrap tall"><canvas id="histChart"></canvas></div>
+    <p class="muted small empty" id="histEmpty" hidden>No data in this range yet.</p>
+  </section>
+
+  <section class="panel">
+    <div class="panel-head"><h2>Session log</h2></div>
+    <div class="tbl"><table><thead><tr><th>When</th><th>Mode</th><th>Event</th><th>Planned</th><th>Actual</th></tr></thead><tbody id="logBody"></tbody></table></div>
+  </section>
+</main>
+
+<!-- Lid-open warning -->
+<div class="scrim" id="lidModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="mTitle">
+    <div class="model3d" id="box3d"><span class="fallback">Loading 3D model…</span></div>
+    <h3 id="mTitle">Close the phone lid first</h3>
+    <p id="mText">Slide the phone lid all the way to the left until it stops. The session starts only when the box sees the lid fully closed.</p>
+    <div class="lidline" id="mStatus"><span class="dot"></span><span id="mStatusText">Lid open · checking every second</span></div>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="mCancel">Cancel</button>
+      <button class="btn primary" type="button" id="mStart" disabled>Start session</button>
+    </div>
+  </div>
+</div>
+
+<!-- Emergency confirm -->
+<div class="scrim" id="emModal" hidden>
+  <div class="modal" role="dialog" aria-modal="true" aria-labelledby="emTitle">
+    <h3 id="emTitle">Unlock without the safeword?</h3>
+    <p>The lid unlocks right away and the session ends. This is logged as an emergency unlock.</p>
+    <div class="actions">
+      <button class="btn ghost" type="button" id="emCancel">Keep it locked</button>
+      <button class="btn danger" type="button" id="emGo">Unlock now</button>
+    </div>
+  </div>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module" src="app.js"></script>
+</body>
+</html>
