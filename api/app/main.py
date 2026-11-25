@@ -22,6 +22,7 @@ from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from .clock import now as clock_now
 from .sessions import SessionError, Sessions
 from .store import MEASUREMENTS, NUMERIC_FIELDS, RANGES, InfluxStore, MemoryStore, clean
 
@@ -75,6 +76,14 @@ def create_app(store=None, sessions: Sessions | None = None, device_token: str |
 
     app = FastAPI(title="Smart Desk Box server", lifespan=lifespan)
 
+    @app.middleware("http")
+    async def no_stale_files(request: Request, call_next):
+        # make browsers revalidate the web app files so updates show up on the next reload
+        resp = await call_next(request)
+        if not request.url.path.startswith("/models/"):
+            resp.headers["Cache-Control"] = "no-cache"
+        return resp
+
     @app.exception_handler(SessionError)
     async def _session_error(_, e: SessionError):
         return JSONResponse({"ok": False, "reason": e.reason}, status_code=e.status)
@@ -95,7 +104,7 @@ def create_app(store=None, sessions: Sessions | None = None, device_token: str |
             raise HTTPException(400, "body must be a JSON object")
         parts = clean(body)
         flat = {k: v for vals in parts.values() for k, v in vals.items()}
-        now = time.time()
+        now = app.state.sessions.clock()
         try:
             app.state.store.write(now, parts)
         except Exception as e:  # noqa: BLE001 - keep the Pi's lock loop alive even if the DB hiccups
@@ -112,14 +121,20 @@ def create_app(store=None, sessions: Sessions | None = None, device_token: str |
     @app.get("/api/latest")
     def latest():
         s = app.state.sessions
-        return {**s.latest, "pi_online": s.pi_online()}
+        return {**s.latest, "pi_online": s.pi_online(), "now": s.clock()}
 
     @app.get("/api/history")
-    def history(field: str, range: str = "24h"):
-        if range not in RANGES:
-            raise HTTPException(400, f"range must be one of {list(RANGES)}")
+    def history(field: str, range: str = "24h", start: float | None = None, end: float | None = None):
+        """Either a preset range, or an explicit window (start/end, epoch seconds) e.g. one session."""
         if field not in NUMERIC_FIELDS and field not in ("lid_closed", "locked"):
             raise HTTPException(400, "unknown field")
+        if start is not None:
+            end = end or app.state.sessions.clock()
+            if not 0 < end - start <= 31 * 86400:
+                raise HTTPException(400, "window must be between 0 and 31 days")
+            return app.state.store.between(field, start, end)
+        if range not in RANGES:
+            raise HTTPException(400, f"range must be one of {list(RANGES)}")
         return app.state.store.history(field, range)
 
     @app.get("/api/fields")
@@ -149,6 +164,11 @@ def create_app(store=None, sessions: Sessions | None = None, device_token: str |
     def stop():
         app.state.sessions.stop()
         return {"ok": True}
+
+    @app.get("/api/stats/week")
+    def week(tz_offset_min: int = 0):
+        """tz_offset_min: minutes east of UTC (Bangkok = 420) so days split at local midnight."""
+        return app.state.sessions.week(max(-840, min(840, tz_offset_min)))
 
     @app.get("/api/session/log")
     def session_log(limit: int = 30):

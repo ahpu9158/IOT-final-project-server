@@ -13,6 +13,8 @@ import time
 
 import bcrypt
 
+from .clock import now as clock_now
+
 START_CONFIRM_TIMEOUT = 30  # s to wait for the Pi to report locked=true
 PI_FRESH = 10               # s; older readings count as "box offline"
 
@@ -23,7 +25,7 @@ class SessionError(Exception):
 
 
 class Sessions:
-    def __init__(self, path: str, clock=time.time):
+    def __init__(self, path: str, clock=clock_now):
         self.clock = clock
         self.lock = threading.RLock()  # one SQLite connection shared by all request threads
         self.db = sqlite3.connect(path, check_same_thread=False)
@@ -58,7 +60,7 @@ class Sessions:
 
     def _log(self, s, event: str):
         now = self.clock()
-        actual = round((now - s["started"]) / 60, 1) if s["started"] else None
+        actual = round(max(0.0, now - s["started"]) / 60, 1) if s["started"] else None
         self.db.execute(
             "INSERT INTO session_log (ts, mode, event, planned_min, actual_min) VALUES (?,?,?,?,?)",
             (now, s["mode"], event, s["planned_min"], actual),
@@ -205,6 +207,41 @@ class Sessions:
             if s["mode"] != "timer":
                 raise SessionError(409, "not_timer")
             self._end(s, "early")
+
+    def week(self, tz_offset_min: int = 0) -> dict:
+        """Focus minutes per day for the last 7 days (local days via the browser's UTC offset)."""
+        now = self.clock()
+        shift = tz_offset_min * 60
+        today = int((now + shift) // 86400)
+        days = [today - i for i in range(6, -1, -1)]
+        per_day = {d: 0.0 for d in days}
+        counts = {"sessions": 0, "finished": 0, "early": 0, "emergency": 0}
+        with self.lock:
+            rows = self.db.execute(
+                "SELECT ts, event, actual_min FROM session_log WHERE ts >= ? AND event IN"
+                " ('finished','early','emergency')",
+                (days[0] * 86400 - shift,),
+            ).fetchall()
+        for r in rows:
+            d = int((r["ts"] + shift) // 86400)
+            if d in per_day:
+                per_day[d] += max(0.0, r["actual_min"] or 0)
+                counts["sessions"] += 1
+                counts[r["event"]] += 1
+        streak = 0
+        for d in reversed(days):  # consecutive days with any focus, ending today (or yesterday)
+            if per_day[d] > 0:
+                streak += 1
+            elif d != today or streak:
+                break
+        total = sum(per_day.values())
+        return {
+            "days": [{"date": d * 86400 - shift, "minutes": round(per_day[d], 1)} for d in days],
+            "total_min": round(total, 1),
+            "streak_days": streak,
+            "completion_rate": round(counts["finished"] / counts["sessions"], 2) if counts["sessions"] else None,
+            **counts,
+        }
 
     def log(self, limit: int = 30) -> list[dict]:
         with self.lock:

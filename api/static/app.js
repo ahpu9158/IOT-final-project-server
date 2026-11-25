@@ -20,10 +20,14 @@ async function api(path, opts = {}) {
   return { ok: r.ok, status: r.status, data };
 }
 
+// Server clock minus browser clock (seconds). Docker on Windows often drifts by minutes,
+// so all "now" comparisons use the server's time.
+let skew = 0;
+const serverNow = () => Date.now() / 1000 + skew;
 const fmtTime = (epoch) =>
   new Date(epoch * 1000).toLocaleString([], { month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" });
 const ago = (epoch) => {
-  const s = Math.max(0, Math.round(Date.now() / 1000 - epoch));
+  const s = Math.max(0, Math.round(serverNow() - epoch));
   return s < 60 ? `${s} s ago` : s < 3600 ? `${Math.round(s / 60)} min ago` : fmtTime(epoch);
 };
 
@@ -58,7 +62,7 @@ const live = new Chart($("liveChart"), {
   type: "line",
   data: { datasets: [
     { label: "Temp °C", data: [], borderColor: tok("--accent"), yAxisID: "y" },
-    { label: "Humidity %", data: [], borderColor: tok("--warn"), yAxisID: "y1" },
+    { label: "Humidity %", data: [], borderColor: tok("--accent-2"), yAxisID: "y1" },
   ] },
   options: chartOpts({
     scales: {
@@ -72,14 +76,14 @@ function pushLive(t, temp, hum) {
   const [a, b] = live.data.datasets;
   if (temp != null) a.data.push({ x: t, y: temp });
   if (hum != null) b.data.push({ x: t, y: hum });
-  const cut = Date.now() - WINDOW_MS;
+  const cut = serverNow() * 1000 - WINDOW_MS;
   for (const d of [a, b]) while (d.data.length && d.data[0].x < cut) d.data.shift();
-  live.options.scales.x.min = cut; live.options.scales.x.max = Date.now();
+  live.options.scales.x.min = cut; live.options.scales.x.max = serverNow() * 1000;
   live.update("none");
 }
 async function seedLive() {
   const [t, h] = await Promise.all([api("/api/history?field=temp&range=1h"), api("/api/history?field=hum&range=1h")]);
-  const cut = Date.now() - WINDOW_MS;
+  const cut = serverNow() * 1000 - WINDOW_MS;
   const pts = (r) => (r.data || []).map((p) => ({ x: Date.parse(p.t), y: p.v })).filter((p) => p.x >= cut);
   live.data.datasets[0].data = pts(t); live.data.datasets[1].data = pts(h);
   live.update("none");
@@ -91,6 +95,7 @@ async function refreshLatest() {
   const r = await api("/api/latest");
   if (!r.ok) return;
   latest = r.data;
+  if (latest.now) skew = latest.now - Date.now() / 1000;
   for (const c of CARDS) {
     const el = $("c_" + c.k), v = latest[c.k];
     if (v == null) continue;
@@ -143,12 +148,74 @@ const EVENT_LABEL = { start: "started", finished: "finished", early: "ended earl
 async function loadLog() {
   const r = await api("/api/session/log");
   if (!r.ok) return;
+  logRows = r.data;
   $("logBody").innerHTML = r.data.length
-    ? r.data.map((e) => `<tr><td>${fmtTime(e.ts)}</td><td>${e.mode === "locked" ? "Phone locked" : "Timer"}</td>
+    ? r.data.map((e, i) => {
+        const view = ENDINGS.has(e.event) && e.actual_min > 0;
+        return `<tr class="${view ? "viewable" : ""}" data-i="${i}"><td>${fmtTime(e.ts)}</td><td>${modeTag(e.mode)}</td>
         <td><span class="ev ${e.event}">${EVENT_LABEL[e.event] || e.event}</span></td>
-        <td>${e.planned_min ?? "—"} min</td><td>${e.actual_min != null ? e.actual_min + " min" : "—"}</td></tr>`).join("")
-    : `<tr><td colspan="5" class="muted">No sessions yet. Start one above.</td></tr>`;
+        <td>${e.planned_min ?? "—"} min</td><td>${e.actual_min != null ? Math.max(0, e.actual_min) + " min" : "—"}</td>
+        <td>${view ? `<button class="view" type="button" data-i="${i}">View</button>` : ""}</td></tr>`;
+      }).join("")
+    : `<tr><td colspan="6" class="muted">No sessions yet. Start one above.</td></tr>`;
 }
+const ENDINGS = new Set(["finished", "early", "emergency"]);
+let logRows = [];
+$("logBody").addEventListener("click", (e) => {
+  const tr = e.target.closest("tr.viewable");
+  if (tr) openSession(logRows[+tr.dataset.i]);
+});
+
+// ---------------- Session details ----------------
+const SD_FIELDS = ["temp", "hum", "gas", "light", "dist"];
+const SD_UNITS = { temp: "°C", hum: "%", gas: "raw", light: "raw", dist: "cm" };
+let sdData = {};
+const sdChart = new Chart($("sdChart"), {
+  type: "line",
+  data: { datasets: [{ data: [], borderColor: tok("--accent-2"), backgroundColor: tok("--accent-soft"), fill: true }] },
+  options: chartOpts(),
+});
+async function openSession(e) {
+  const end = e.ts, start = end - e.actual_min * 60;
+  $("sdTitle").textContent = e.mode === "locked" ? "Phone-locked session" : "Timer session";
+  $("sdSub").textContent = `${fmtTime(start)} – ${new Date(end * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })} · ${e.actual_min} of ${e.planned_min} min · ${EVENT_LABEL[e.event]}`;
+  $("sdStats").innerHTML = "";
+  openModal($("sdModal"));
+  const res = await Promise.all(
+    [...SD_FIELDS, "level"].map((f) => api(`/api/history?field=${f}&start=${start}&end=${end}`)));
+  sdData = {};
+  [...SD_FIELDS, "level"].forEach((f, i) => (sdData[f] = (res[i].data || []).map((p) => ({ x: Date.parse(p.t), y: p.v }))));
+  const avg = (f) => { const d = sdData[f]; return d.length ? d.reduce((a, p) => a + p.y, 0) / d.length : null; };
+  const atDesk = sdData.dist.length ? (100 * sdData.dist.filter((p) => p.y > 0 && p.y < PRESENT_CM).length) / sdData.dist.length : null;
+  const warn = sdData.level.length ? (100 * sdData.level.filter((p) => p.y >= 0.5).length) / sdData.level.length : null;
+  const stat = (k, v, unit, d = 1) => `<div class="sd-stat"><div class="k">${k}</div><div class="v">${v == null ? "—" : v.toFixed(d) + unit}</div></div>`;
+  $("sdStats").innerHTML =
+    stat("At desk", atDesk, "%", 0) + stat("Avg temp", avg("temp"), "°C") + stat("Avg humidity", avg("hum"), "%", 0) +
+    stat("Avg air (raw)", avg("gas"), "", 0) + stat("Not OK / warning", warn, "%", 0);
+  drawSd();
+}
+function drawSd() {
+  const f = document.querySelector('input[name="sdf"]:checked').value;
+  const pts = sdData[f] || [];
+  sdChart.data.datasets[0].data = pts;
+  sdChart.options.scales.y.title = { display: true, text: SD_UNITS[f], color: tok("--muted") };
+  sdChart.update();
+  $("sdEmpty").hidden = pts.length > 0;
+}
+document.querySelectorAll('input[name="sdf"]').forEach((el) => el.addEventListener("change", drawSd));
+$("sdClose").addEventListener("click", () => closeModal($("sdModal")));
+$("sdModal").addEventListener("click", (e) => { if (e.target === $("sdModal")) closeModal($("sdModal")); });
+
+// ---------------- Show / hide safeword ----------------
+document.querySelectorAll(".eye").forEach((b) => b.addEventListener("click", () => {
+  const input = $(b.dataset.for);
+  const show = input.type === "password";
+  input.type = show ? "text" : "password";
+  b.textContent = show ? "Hide" : "Show";
+  b.setAttribute("aria-pressed", String(show));
+  b.setAttribute("aria-label", show ? "Hide safeword" : "Show safeword");
+  input.focus();
+}));
 
 // ---------------- Focus session ----------------
 const mode = () => document.querySelector('input[name="mode"]:checked').value;
@@ -189,7 +256,7 @@ function renderSession() {
       : locked ? `Phone locked until ${new Date(s.until * 1000).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}` : "Stay focused. Your desk is being monitored.";
   }
   if (prevPhase && prevPhase !== "idle" && idle) {
-    loadLog();
+    loadLog(); loadWeek();
     $("startErr").textContent = "";
   }
   prevPhase = s.phase;
@@ -211,7 +278,7 @@ async function tryStart() {
   const r = await api("/api/session/start", { method: "POST", body });
   if (r.ok) {
     closeModal($("lidModal"));
-    $("safeword").value = "";
+    $("safeword").value = ""; hideWord("safeword");
     await refreshSession(); loadLog();
     return;
   }
@@ -231,7 +298,7 @@ $("unlockForm").addEventListener("submit", async (e) => {
   e.preventDefault();
   const r = await api("/api/session/unlock", { method: "POST", body: { safeword: $("unlockWord").value } });
   $("unlockErr").textContent = r.ok ? "" : r.status === 401 ? "Wrong safeword." : "Couldn't unlock.";
-  $("unlockWord").value = "";
+  $("unlockWord").value = ""; hideWord("unlockWord");
   refreshSession(); loadLog();
 });
 $("stopBtn").addEventListener("click", async () => { await api("/api/session/stop", { method: "POST" }); refreshSession(); loadLog(); });
@@ -247,7 +314,7 @@ let lastFocus = null;
 function openModal(m) { lastFocus = document.activeElement; m.hidden = false; m.querySelector("button")?.focus(); }
 function closeModal(m) { if (m.hidden) return; m.hidden = true; lastFocus?.focus?.(); }
 document.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") { closeModal($("lidModal")); closeModal($("emModal")); }
+  if (e.key === "Escape") { closeModal($("lidModal")); closeModal($("emModal")); closeModal($("sdModal")); }
 });
 $("mCancel").addEventListener("click", () => closeModal($("lidModal")));
 $("mStart").addEventListener("click", tryStart);
@@ -321,9 +388,58 @@ async function initBox3D(host) {
   });
 }
 
+// ---------------- Icons ----------------
+function modeTag(m) {
+  return m === "locked"
+    ? '<span class="mtag"><svg class="ic"><use href="#i-phone"/></svg>Phone locked</span>'
+    : '<span class="mtag"><svg class="ic"><use href="#i-timer"/></svg>Timer</span>';
+}
+
+// ---------------- This week ----------------
+const weekChart = new Chart($("weekChart"), {
+  type: "bar",
+  data: { labels: [], datasets: [{ data: [], backgroundColor: tok("--accent-2"), borderRadius: 8, borderSkipped: false, maxBarThickness: 34 }] },
+  options: {
+    responsive: true, maintainAspectRatio: false, animation: { duration: 500 },
+    scales: {
+      x: { ticks: { color: tok("--muted"), font: { weight: "bold" } }, grid: { display: false } },
+      y: { beginAtZero: true, ticks: { color: tok("--muted"), maxTicksLimit: 4 }, grid: { color: tok("--line") }, title: { display: true, text: "min", color: tok("--muted") } },
+    },
+    plugins: { legend: { display: false }, tooltip: { callbacks: { label: (c) => `${c.parsed.y} min focused` } } },
+  },
+});
+async function loadWeek() {
+  const r = await api(`/api/stats/week?tz_offset_min=${-new Date().getTimezoneOffset()}`);
+  if (!r.ok) return;
+  const w = r.data;
+  const day = (d) => new Date(d.date * 1000);
+  weekChart.data.labels = w.days.map((d, i) => (i === 6 ? "Today" : day(d).toLocaleDateString([], { weekday: "short" })));
+  weekChart.data.datasets[0].data = w.days.map((d) => d.minutes);
+  weekChart.data.datasets[0].backgroundColor = w.days.map((_, i) => (i === 6 ? tok("--accent") : tok("--accent-2")));
+  weekChart.update();
+  $("weekRange").textContent = `${day(w.days[0]).toLocaleDateString([], { month: "short", day: "numeric" })} – today`;
+  const h = Math.floor(w.total_min / 60), m = Math.round(w.total_min % 60);
+  const tile = (icon, k, v) => `<div class="ws"><svg class="ic"><use href="#i-${icon}"/></svg><div><div class="v">${v}</div><div class="k">${k}</div></div></div>`;
+  $("weekStats").innerHTML =
+    tile("clock", "focused", h ? `${h}h ${m}m` : `${m}m`) +
+    tile("stack", "sessions", w.sessions) +
+    tile("flame", "day streak", w.streak_days) +
+    tile("check", "finished on time", w.completion_rate == null ? "—" : Math.round(w.completion_rate * 100) + "%");
+}
+
+// ---------------- Focus sounds ----------------
+import("./player.js").then(({ initPlayer }) => initPlayer()).catch((e) => console.error("player", e));
+
 // ---------------- Loops ----------------
-await Promise.all([refreshLatest(), refreshSession(), seedLive(), loadHistory(), loadLog()]);
+await Promise.all([refreshLatest(), refreshSession(), seedLive(), loadHistory(), loadLog(), loadWeek()]);
 setInterval(refreshLatest, 2000);
 setInterval(refreshSession, 1000);
 setInterval(loadHistory, 60000);
 setInterval(loadLog, 15000);
+setInterval(loadWeek, 60000);
+
+function hideWord(id) {
+  const input = $(id), b = document.querySelector(`.eye[data-for="${id}"]`);
+  input.type = "password";
+  b.textContent = "Show"; b.setAttribute("aria-pressed", "false"); b.setAttribute("aria-label", "Show safeword");
+}

@@ -25,7 +25,7 @@ class Clock:
 def env(tmp_path):
     clock = Clock()
     sessions = Sessions(str(tmp_path / "t.db"), clock=clock)
-    app = create_app(store=MemoryStore(), sessions=sessions, device_token=TOKEN)
+    app = create_app(store=MemoryStore(clock=clock), sessions=sessions, device_token=TOKEN)
     with TestClient(app) as c:
         yield c, clock
 
@@ -129,3 +129,26 @@ def test_concurrent_requests_dont_crash(env):
     with ThreadPoolExecutor(8) as ex:
         codes = list(ex.map(lambda f: f().status_code, calls))
     assert set(codes) == {200}
+
+
+def test_history_window_for_a_session(env):
+    c, clock = env
+    send(c, temp=24.0)
+    now = clock.t
+    h = c.get(f"/api/history?field=temp&start={now - 60}&end={now + 1}").json()
+    assert h and h[-1]["v"] == 24.0
+    assert c.get(f"/api/history?field=temp&start={now}&end={now - 5}").status_code == 400
+
+
+def test_weekly_stats(env):
+    c, clock = env
+    c.post("/api/session/start", json={"mode": "timer", "minutes": 30})
+    clock.t += 30 * 60 + 1
+    c.get("/api/session")  # timer runs out -> finished
+    c.post("/api/session/start", json={"mode": "timer", "minutes": 30})
+    clock.t += 10 * 60
+    c.post("/api/session/stop")
+    w = c.get("/api/stats/week?tz_offset_min=420").json()
+    assert len(w["days"]) == 7
+    assert w["sessions"] == 2 and w["finished"] == 1 and w["early"] == 1
+    assert abs(w["total_min"] - 40) < 0.2 and w["streak_days"] == 1 and w["completion_rate"] == 0.5

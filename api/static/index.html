@@ -4,12 +4,38 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>Smart Desk Box</title>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Sans+Thai:wght@400;600&family=IBM+Plex+Mono:wght@400;500&family=Space+Grotesk:wght@500;700&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@500;600;700&family=Nunito:wght@400;600;700;800&family=Mali:wght@400;600&family=DM+Mono:wght@400;500&display=swap">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-phone" viewBox="0 0 24 24"><rect x="6" y="2.5" width="12" height="19" rx="3"/><path d="M10.5 18.5h3"/><rect x="9" y="8.5" width="6" height="5" rx="1"/><path d="M10.2 8.5V7a1.8 1.8 0 0 1 3.6 0v1.5"/></symbol>
+    <symbol id="i-timer" viewBox="0 0 24 24"><circle cx="12" cy="13.5" r="7.5"/><path d="M12 13.5V9.5M9.5 2.5h5M18.5 6.5l1.5-1.5"/></symbol>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5.5v13l10.5-6.5z" fill="currentColor"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><rect x="7" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/><rect x="13.5" y="5.5" width="3.5" height="13" rx="1" fill="currentColor"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 6l8 6-8 6z" fill="currentColor"/><path d="M17.5 6v12"/></symbol>
+    <symbol id="i-brown" viewBox="0 0 24 24"><path d="M2.5 12c2-4 3.5-4 5.5 0s3.5 4 5.5 0 3.5-4 5.5 0 2.5 2 2.5 2"/></symbol>
+    <symbol id="i-rain" viewBox="0 0 24 24"><path d="M7 15.5a4.5 4.5 0 0 1 .5-9 5.5 5.5 0 0 1 10.3 1.8A3.6 3.6 0 0 1 17.5 15.5z"/><path d="M8.5 18.5l-1 2M12.5 18.5l-1 2M16.5 18.5l-1 2"/></symbol>
+    <symbol id="i-fire" viewBox="0 0 24 24"><path d="M12 21.5c-4 0-6.5-2.7-6.5-6.3 0-3.3 2.4-5.4 3.6-8.7.4 2 1.4 3 2.4 3.6.3-2.6 1.6-5 3.6-6.6-.2 3.6 3.4 5.9 3.4 10.3 0 4.6-2.8 7.7-6.5 7.7z"/></symbol>
+    <symbol id="i-lofi" viewBox="0 0 24 24"><path d="M9 18V5.5l11-2.5V16"/><circle cx="6.5" cy="18" r="2.5"/><circle cx="17.5" cy="16" r="2.5"/></symbol>
+    <symbol id="i-upload" viewBox="0 0 24 24"><path d="M12 15.5V4M7.5 8.5L12 4l4.5 4.5M4.5 15v3.5a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V15"/></symbol>
+    <symbol id="i-vol" viewBox="0 0 24 24"><path d="M4 9.5h3.5L12 5.5v13l-4.5-4H4z"/><path d="M15.5 9a4 4 0 0 1 0 6M18 6.5a7.5 7.5 0 0 1 0 11"/></symbol>
+    <symbol id="i-flame" viewBox="0 0 24 24"><path d="M12 21.5c-3.6 0-6-2.5-6-5.8 0-4.2 4-6 4.5-11.2 3 1.8 7.5 5.6 7.5 11.2 0 3.3-2.4 5.8-6 5.8z"/><path d="M12 21.5c-1.6 0-2.6-1.1-2.6-2.6 0-1.8 1.7-2.6 2.6-4.4.9 1.8 2.6 2.6 2.6 4.4 0 1.5-1 2.6-2.6 2.6z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 7.5V12l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M8 12.3l2.7 2.7L16 9.5"/></symbol>
+    <symbol id="i-stack" viewBox="0 0 24 24"><rect x="3.5" y="14.5" width="17" height="5" rx="1.5"/><rect x="5.5" y="9.5" width="13" height="5" rx="1.5"/><rect x="7.5" y="4.5" width="9" height="5" rx="1.5"/></symbol>
+  </defs>
+</svg>
 <header class="top">
-  <div class="brand"><span class="logo" aria-hidden="true"></span>Smart Desk Box</div>
+  <div class="brand">
+    <svg class="logo" viewBox="0 0 40 32" aria-hidden="true">
+      <rect x="3" y="20" width="34" height="8" rx="2.5" class="b1"/>
+      <rect x="6" y="12" width="28" height="8" rx="2.5" class="b2"/>
+      <rect x="9" y="4" width="22" height="8" rx="2.5" class="b3"/>
+    </svg>
+    <div><div class="name">Smart Desk Box</div><div class="tag">study group · desk 01</div></div>
+  </div>
   <div class="top-status">
     <span class="pill" id="statePill">—</span>
     <span class="gw" id="gw"><span class="dot"></span><span id="gwText">Box offline</span></span>
@@ -19,10 +45,10 @@
 <main class="wrap">
   <section class="grid-top">
     <div class="panel live">
-      <div class="panel-head"><h2>Live</h2><span class="muted small" id="lastSeen">waiting for data…</span></div>
+      <div class="panel-head"><h2>Right now</h2><span class="muted small" id="lastSeen">waiting for data…</span></div>
       <div class="cards" id="cards"></div>
       <div class="chart-wrap"><canvas id="liveChart" aria-label="Last 15 minutes"></canvas></div>
-      <div class="chart-legend muted small">Last 15 minutes · temperature (°C) and humidity (%)</div>
+      <div class="chart-legend small"><span class="key k1"></span>Temperature °C <span class="key k2"></span>Humidity % <span class="muted">· last 15 minutes</span></div>
     </div>
 
     <div class="panel focus" id="focus">
@@ -32,8 +58,8 @@
         <div class="field">
           <span class="label">Mode</span>
           <div class="seg" role="radiogroup" aria-label="Mode">
-            <label><input type="radio" name="mode" id="modeLocked" value="locked" checked><span>Lock my phone inside</span></label>
-            <label><input type="radio" name="mode" id="modeTimer" value="timer"><span>Timer only</span></label>
+            <label><input type="radio" name="mode" id="modeLocked" value="locked" checked><span><svg class="ic"><use href="#i-phone"/></svg>Lock my phone inside</span></label>
+            <label><input type="radio" name="mode" id="modeTimer" value="timer"><span><svg class="ic"><use href="#i-timer"/></svg>Timer only</span></label>
           </div>
         </div>
         <div class="field">
@@ -48,12 +74,15 @@
         </div>
         <div class="field" id="safewordField">
           <label class="label" for="safeword">Safeword</label>
-          <input type="password" id="safeword" minlength="3" placeholder="Needed to unlock early">
+          <div class="pw">
+            <input type="password" id="safeword" minlength="3" placeholder="Needed to unlock early">
+            <button type="button" class="eye" data-for="safeword" aria-label="Show safeword" aria-pressed="false">Show</button>
+          </div>
           <span class="hint">Pick something you won't type on impulse. It's forgotten when the session ends.</span>
         </div>
         <div class="lidline" id="lidLine"><span class="dot"></span><span id="lidText">Lid status unknown</span></div>
         <p class="err" id="startErr" role="alert"></p>
-        <button type="submit" class="btn primary" id="startBtn">Start session</button>
+        <button type="submit" class="btn primary big-btn" id="startBtn">Start session</button>
       </form>
 
       <div id="running" hidden>
@@ -67,14 +96,36 @@
         <p class="run-note" id="runNote"></p>
         <div id="lockedControls">
           <form id="unlockForm" class="row" autocomplete="off">
-            <input type="password" id="unlockWord" placeholder="Safeword" aria-label="Safeword">
+            <div class="pw grow">
+              <input type="password" id="unlockWord" placeholder="Safeword" aria-label="Safeword">
+              <button type="button" class="eye" data-for="unlockWord" aria-label="Show safeword" aria-pressed="false">Show</button>
+            </div>
             <button class="btn" type="submit">Unlock early</button>
           </form>
           <p class="err" id="unlockErr" role="alert"></p>
-          <button class="btn danger ghost" id="emergencyBtn" type="button">Emergency unlock</button>
+          <button class="link-danger" id="emergencyBtn" type="button">Emergency unlock</button>
         </div>
         <div id="timerControls"><button class="btn" id="stopBtn" type="button">Stop</button></div>
       </div>
+    </div>
+  </section>
+
+  <section class="grid-mid">
+    <div class="panel week">
+      <div class="panel-head"><h2>This week</h2><span class="muted small" id="weekRange"></span></div>
+      <div class="week-stats" id="weekStats"></div>
+      <div class="chart-wrap short"><canvas id="weekChart" aria-label="Focus minutes per day"></canvas></div>
+    </div>
+    <div class="panel music">
+      <div class="panel-head"><h2>Focus sounds</h2><span class="muted small">made in your browser</span></div>
+      <div class="sounds" id="sounds"></div>
+      <div class="player">
+        <button type="button" class="round" id="plToggle" aria-label="Play"><svg class="ic"><use id="plIcon" href="#i-play"/></svg></button>
+        <button type="button" class="round small-r" id="plNext" aria-label="Next"><svg class="ic"><use href="#i-next"/></svg></button>
+        <div class="np"><span class="muted small">Now playing</span><b id="nowPlaying">Nothing playing</b></div>
+        <label class="vol"><svg class="ic"><use href="#i-vol"/></svg><input type="range" id="plVol" min="0" max="1" step="0.01" value="0.5" aria-label="Volume"></label>
+      </div>
+      <label class="btn ghost own" id="ownBtn"><svg class="ic"><use href="#i-upload"/></svg>Play my own music files<input type="file" id="ownFiles" accept="audio/*" multiple hidden></label>
     </div>
   </section>
 
@@ -104,8 +155,8 @@
   </section>
 
   <section class="panel">
-    <div class="panel-head"><h2>Session log</h2></div>
-    <div class="tbl"><table><thead><tr><th>When</th><th>Mode</th><th>Event</th><th>Planned</th><th>Actual</th></tr></thead><tbody id="logBody"></tbody></table></div>
+    <div class="panel-head"><h2>Past sessions</h2><span class="muted small">Tap a finished session to see the desk during it</span></div>
+    <div class="tbl"><table><thead><tr><th>When</th><th>Mode</th><th>Event</th><th>Planned</th><th>Actual</th><th></th></tr></thead><tbody id="logBody"></tbody></table></div>
   </section>
 </main>
 
@@ -132,6 +183,26 @@
       <button class="btn ghost" type="button" id="emCancel">Keep it locked</button>
       <button class="btn danger" type="button" id="emGo">Unlock now</button>
     </div>
+  </div>
+</div>
+
+<!-- Session details -->
+<div class="scrim" id="sdModal" hidden>
+  <div class="modal wide" role="dialog" aria-modal="true" aria-labelledby="sdTitle">
+    <div class="sd-head">
+      <div><h3 id="sdTitle">Session</h3><div class="muted small" id="sdSub"></div></div>
+      <button class="x" type="button" id="sdClose" aria-label="Close">×</button>
+    </div>
+    <div class="sd-stats" id="sdStats"></div>
+    <div class="seg small" role="radiogroup" aria-label="Sensor" id="sdFields">
+      <label><input type="radio" name="sdf" value="temp" checked><span>Temp</span></label>
+      <label><input type="radio" name="sdf" value="hum"><span>Humidity</span></label>
+      <label><input type="radio" name="sdf" value="gas"><span>Air</span></label>
+      <label><input type="radio" name="sdf" value="light"><span>Light</span></label>
+      <label><input type="radio" name="sdf" value="dist"><span>Distance</span></label>
+    </div>
+    <div class="chart-wrap"><canvas id="sdChart"></canvas></div>
+    <p class="muted small empty" id="sdEmpty" hidden>No sensor data was recorded during this session.</p>
   </div>
 </div>
 

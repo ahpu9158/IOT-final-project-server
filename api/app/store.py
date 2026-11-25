@@ -2,6 +2,8 @@
 from __future__ import annotations
 
 import time
+
+from .clock import now as clock_now
 from datetime import datetime, timezone
 
 # Sensor fields we accept from the Pi, grouped into InfluxDB measurements.
@@ -45,26 +47,39 @@ def clean(reading: dict) -> dict[str, dict]:
 
 
 class MemoryStore:
-    def __init__(self):
+    def __init__(self, clock=clock_now):
+        self.clock = clock
         self.points: list[tuple[float, str, dict]] = []
 
     def write(self, ts: float, data: dict[str, dict]):
         for meas, vals in data.items():
             self.points.append((ts, meas, vals))
-        cutoff = time.time() - RANGE_SECONDS["30d"]
+        cutoff = self.clock() - RANGE_SECONDS["30d"]
         if self.points and self.points[0][0] < cutoff:
             self.points = [p for p in self.points if p[0] >= cutoff]
 
     def history(self, field: str, rng: str):
-        since = time.time() - RANGE_SECONDS[rng]
+        since = self.clock() - RANGE_SECONDS[rng]
         return [
             {"t": datetime.fromtimestamp(ts, timezone.utc).isoformat(), "v": vals[field]}
             for ts, _, vals in self.points
             if ts >= since and field in vals
         ]
 
+    def between(self, field: str, start: float, end: float):
+        return [
+            {"t": datetime.fromtimestamp(ts, timezone.utc).isoformat(), "v": float(vals[field])}
+            for ts, _, vals in self.points
+            if start <= ts <= end and field in vals
+        ]
+
     def close(self):
         pass
+
+
+def window_for(seconds: float) -> str:
+    """Aggregation window giving roughly 150 points over the span (min 5 s)."""
+    return f"{max(5, int(seconds / 150))}s"
 
 
 class InfluxStore:
@@ -121,6 +136,20 @@ from(bucket: "{self.buckets['raw']}")
   |> filter(fn: (r) => r._field == "{field}")
   |> map(fn: (r) => ({{r with _value: float(v: r._value)}}))
   |> aggregateWindow(every: {every}, fn: mean, createEmpty: false)'''
+        return [
+            {"t": r.get_time().isoformat(), "v": r.get_value()}
+            for table in self.query.query(flux)
+            for r in table.records
+        ]
+
+    def between(self, field: str, start: float, end: float):
+        iso = lambda t: datetime.fromtimestamp(t, timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")  # noqa: E731
+        bucket = "raw" if clock_now() - start < RANGE_SECONDS["30d"] - 3600 else "1m"
+        flux = f'''from(bucket: "{self.buckets[bucket]}")
+  |> range(start: {iso(start)}, stop: {iso(end + 1)})
+  |> filter(fn: (r) => r._field == "{field}")
+  |> map(fn: (r) => ({{r with _value: float(v: r._value)}}))
+  |> aggregateWindow(every: {window_for(end - start)}, fn: mean, createEmpty: false)'''
         return [
             {"t": r.get_time().isoformat(), "v": r.get_value()}
             for table in self.query.query(flux)
